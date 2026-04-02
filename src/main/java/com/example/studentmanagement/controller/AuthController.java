@@ -39,24 +39,20 @@ public class AuthController {
     })
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
+        if (userRepository.existsByUsername(request.username())) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
 
         User user = User.builder()
-                .username(request.getUsername())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(request.getRole() != null ? request.getRole() : User.Role.STUDENT)
+                .username(request.username())
+                .password(passwordEncoder.encode(request.password()))
+                .role(request.role())
                 .build();
 
         userRepository.save(user);
 
-        String token = jwtUtil.generateToken(user);
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .username(user.getUsername())
-                .role(user.getRole())
-                .build());
+        return ResponseEntity.ok(
+                new AuthResponse(jwtUtil.generateToken(user), user.getUsername(), user.getRole()));
     }
 
     @Operation(summary = "Login", description = "Authenticates a user and returns a JWT token")
@@ -68,20 +64,14 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         try {
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-            );
+                    new UsernamePasswordAuthenticationToken(request.username(), request.password()));
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow();
+        User user = userRepository.findByUsername(request.username()).orElseThrow();
 
-        String token = jwtUtil.generateToken(user);
-        return ResponseEntity.ok(AuthResponse.builder()
-                .token(token)
-                .username(user.getUsername())
-                .role(user.getRole())
-                .build());
+        return ResponseEntity.ok(
+                new AuthResponse(jwtUtil.generateToken(user), user.getUsername(), user.getRole()));
     }
 }

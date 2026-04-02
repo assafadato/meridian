@@ -5,20 +5,18 @@ import com.example.studentmanagement.model.Grade;
 import com.example.studentmanagement.repository.EnrollmentRepository;
 import com.example.studentmanagement.repository.GradeRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class GradeService {
 
-    @Autowired
-    private GradeRepository gradeRepository;
-
-    @Autowired
-    private EnrollmentRepository enrollmentRepository;
+    private final GradeRepository gradeRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public List<Grade> getAllGrades() {
         return gradeRepository.findAll();
@@ -44,7 +42,8 @@ public class GradeService {
     @Transactional
     public Grade createGrade(Grade grade) {
         if (grade.getEnrollment() != null && grade.getEnrollment().getId() != null) {
-            Enrollment enrollment = enrollmentRepository.findById(grade.getEnrollment().getId())
+            Enrollment enrollment = enrollmentRepository
+                    .findById(grade.getEnrollment().getId())
                     .orElseThrow(() -> new EntityNotFoundException(
                             "Enrollment not found with id: " + grade.getEnrollment().getId()));
             grade.setEnrollment(enrollment);

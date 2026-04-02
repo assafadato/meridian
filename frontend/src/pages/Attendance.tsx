@@ -114,8 +114,8 @@ const AttendancePage: React.FC = () => {
       }
       setModalOpen(false);
       fetchAll();
-    } catch {
-      setError('Failed to save attendance record');
+    } catch (e: any) {
+      setError(e?.response?.data ?? 'Failed to save attendance record');
     } finally {
       setSaving(false);
     }

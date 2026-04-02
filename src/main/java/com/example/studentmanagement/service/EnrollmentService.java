@@ -7,23 +7,19 @@ import com.example.studentmanagement.repository.CourseRepository;
 import com.example.studentmanagement.repository.EnrollmentRepository;
 import com.example.studentmanagement.repository.StudentRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class EnrollmentService {
 
-    @Autowired
-    private EnrollmentRepository enrollmentRepository;
-
-    @Autowired
-    private StudentRepository studentRepository;
-
-    @Autowired
-    private CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final StudentRepository studentRepository;
+    private final CourseRepository courseRepository;
 
     public List<Enrollment> getAllEnrollments() {
         return enrollmentRepository.findAll();
@@ -48,9 +44,11 @@ public class EnrollmentService {
             throw new IllegalArgumentException("Student is already enrolled in this course");
         }
         Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new EntityNotFoundException("Student not found with id: " + studentId));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Student not found with id: " + studentId));
         Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new EntityNotFoundException("Course not found with id: " + courseId));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Course not found with id: " + courseId));
 
         Enrollment enrollment = new Enrollment();
         enrollment.setStudent(student);
@@ -60,9 +58,10 @@ public class EnrollmentService {
 
     @Transactional
     public void unenroll(Long studentId, Long courseId) {
-        Enrollment enrollment = enrollmentRepository.findByStudentIdAndCourseId(studentId, courseId)
+        Enrollment enrollment = enrollmentRepository
+                .findByStudentIdAndCourseId(studentId, courseId)
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "Enrollment not found for student " + studentId + " and course " + courseId));
+                        "Enrollment not found for student %d and course %d".formatted(studentId, courseId)));
         enrollmentRepository.delete(enrollment);
     }
 

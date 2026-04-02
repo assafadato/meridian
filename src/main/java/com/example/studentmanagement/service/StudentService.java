@@ -6,7 +6,7 @@ import com.example.studentmanagement.model.User;
 import com.example.studentmanagement.repository.StudentRepository;
 import com.example.studentmanagement.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +16,12 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class StudentService {
 
-    @Autowired private StudentRepository studentRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private PasswordEncoder passwordEncoder;
+    private final StudentRepository studentRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public List<Student> getAllStudents() {
         return studentRepository.findAll();
@@ -58,29 +59,32 @@ public class StudentService {
     @Transactional
     public Student createStudent(Student student) {
         if (studentRepository.existsByEmail(student.getEmail())) {
-            throw new IllegalArgumentException("Student with email " + student.getEmail() + " already exists");
+            throw new IllegalArgumentException(
+                    "Student with email %s already exists".formatted(student.getEmail()));
         }
         return studentRepository.save(student);
     }
 
     @Transactional
     public Student createStudentWithAccount(CreateStudentRequest req) {
-        if (userRepository.existsByUsername(req.getUsername())) {
-            throw new IllegalArgumentException("Username already exists: " + req.getUsername());
+        if (userRepository.existsByUsername(req.username())) {
+            throw new IllegalArgumentException("Username already exists: " + req.username());
         }
-        if (studentRepository.existsByEmail(req.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + req.getEmail());
+        if (studentRepository.existsByEmail(req.email())) {
+            throw new IllegalArgumentException("Email already exists: " + req.email());
         }
+
         User user = userRepository.save(User.builder()
-                .username(req.getUsername())
-                .password(passwordEncoder.encode(req.getPassword()))
+                .username(req.username())
+                .password(passwordEncoder.encode(req.password()))
                 .role(User.Role.STUDENT)
                 .build());
+
         Student student = new Student();
-        student.setFirstName(req.getFirstName());
-        student.setLastName(req.getLastName());
-        student.setEmail(req.getEmail());
-        student.setDateOfBirth(req.getDateOfBirth());
+        student.setFirstName(req.firstName());
+        student.setLastName(req.lastName());
+        student.setEmail(req.email());
+        student.setDateOfBirth(req.dateOfBirth());
         student.setLinkedUser(user);
         return studentRepository.save(student);
     }
