@@ -1,6 +1,7 @@
 package com.example.studentmanagement.model;
 
 import jakarta.persistence.*;
+import jakarta.persistence.PrePersist;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -34,4 +35,9 @@ public class Grade {
 
     @Column(name = "graded_at")
     private LocalDateTime gradedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (gradedAt == null) gradedAt = LocalDateTime.now();
+    }
 }

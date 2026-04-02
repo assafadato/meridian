@@ -3,18 +3,19 @@ import {
   Box, Typography, Button, TextField, Table, TableHead, TableRow, TableCell,
   TableBody, TableContainer, Paper, IconButton, Chip, Dialog, DialogTitle,
   DialogContent, DialogActions, Alert, CircularProgress, InputAdornment,
-  Tooltip,
+  Tooltip, FormControl, InputLabel, Select, MenuItem, FormHelperText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Course } from '../types';
 import { getCourses, createCourse, updateCourse, deleteCourse, searchCourses } from '../api/courses';
+import { getTeachers, type UserRecord } from '../api/users';
 
 const schema = z.object({
   name: z.string().min(1, 'Course name is required').max(100),
@@ -28,6 +29,7 @@ type FormData = z.output<typeof schema>;
 
 const Courses: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [teachers, setTeachers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -38,7 +40,7 @@ const Courses: React.FC = () => {
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormInput, unknown, FormData>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormInput, unknown, FormData>({
     resolver: zodResolver(schema),
   });
 
@@ -46,8 +48,9 @@ const Courses: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await getCourses();
-      setCourses(res.data);
+      const [coursesRes, teachersRes] = await Promise.allSettled([getCourses(), getTeachers()]);
+      if (coursesRes.status === 'fulfilled') setCourses(coursesRes.value.data);
+      if (teachersRes.status === 'fulfilled') setTeachers(teachersRes.value.data);
     } catch {
       setError('Failed to load courses');
     } finally {
@@ -228,13 +231,22 @@ const Courses: React.FC = () => {
               error={!!errors.description}
               helperText={errors.description?.message}
             />
-            <TextField
-              label="Teacher"
-              fullWidth
-              {...register('teacher')}
-              error={!!errors.teacher}
-              helperText={errors.teacher?.message}
-            />
+            <FormControl fullWidth error={!!errors.teacher}>
+              <InputLabel>Teacher</InputLabel>
+              <Controller
+                name="teacher"
+                control={control}
+                render={({ field }) => (
+                  <Select {...field} label="Teacher" value={field.value ?? ''}>
+                    <MenuItem value=""><em>None</em></MenuItem>
+                    {teachers.map((t) => (
+                      <MenuItem key={t.id} value={t.username}>{t.username}</MenuItem>
+                    ))}
+                  </Select>
+                )}
+              />
+              {errors.teacher && <FormHelperText>{errors.teacher.message}</FormHelperText>}
+            </FormControl>
             <TextField
               label="Credits"
               type="number"

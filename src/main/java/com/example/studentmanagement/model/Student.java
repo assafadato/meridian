@@ -1,6 +1,8 @@
 package com.example.studentmanagement.model;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.example.studentmanagement.model.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -41,7 +43,13 @@ public class Student {
     @Column(name = "enrolled_at")
     private LocalDateTime enrolledAt;
 
-    @JsonManagedReference
+    // Include only safe, non-sensitive User fields (password is already WRITE_ONLY, excludes UserDetails internals)
+    @JsonIgnoreProperties({"authorities", "accountNonExpired", "accountNonLocked", "credentialsNonExpired", "enabled"})
+    @OneToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id")
+    private User linkedUser;
+
+    @JsonIgnore
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Enrollment> enrollments = new ArrayList<>();
 

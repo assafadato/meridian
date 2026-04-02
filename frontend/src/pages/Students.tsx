@@ -14,16 +14,28 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Student } from '../types';
-import { getStudents, createStudent, updateStudent, deleteStudent, searchStudents } from '../api/students';
+import { getStudents, updateStudent, deleteStudent, searchStudents } from '../api/students';
+import axiosInstance from '../api/axiosInstance';
 
-const schema = z.object({
+const createSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Valid email is required'),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  username: z.string().min(2, 'Username is required'),
+  password: z.string().min(4, 'Password must be at least 4 chars'),
 });
 
-type FormData = z.infer<typeof schema>;
+const editSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Valid email is required'),
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  username: z.string().optional(),
+  password: z.string().optional(),
+});
+
+type FormData = z.infer<typeof createSchema>;
 
 const Students: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -38,7 +50,7 @@ const Students: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(editingStudent ? editSchema : createSchema) as any,
   });
 
   const fetchStudents = useCallback(async () => {
@@ -72,7 +84,7 @@ const Students: React.FC = () => {
 
   const openCreate = () => {
     setEditingStudent(null);
-    reset({ firstName: '', lastName: '', email: '', dateOfBirth: '' });
+    reset({ firstName: '', lastName: '', email: '', dateOfBirth: '', username: '', password: '' });
     setModalOpen(true);
   };
 
@@ -93,12 +105,20 @@ const Students: React.FC = () => {
       if (editingStudent?.id) {
         await updateStudent(editingStudent.id, data);
       } else {
-        await createStudent(data);
+        // Admin creates student with linked user account
+        await axiosInstance.post('/students', {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          dateOfBirth: data.dateOfBirth,
+          username: data.username,
+          password: data.password,
+        });
       }
       setModalOpen(false);
       fetchStudents();
     } catch {
-      setError('Failed to save student');
+      setError('Failed to save student (username may already exist)');
     } finally {
       setSaving(false);
     }
@@ -238,6 +258,28 @@ const Students: React.FC = () => {
               helperText={errors.dateOfBirth?.message}
               InputLabelProps={{ shrink: true }}
             />
+            {!editingStudent && (
+              <>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                  Login Account
+                </Typography>
+                <TextField
+                  label="Username"
+                  fullWidth
+                  {...register('username')}
+                  error={!!errors.username}
+                  helperText={errors.username?.message}
+                />
+                <TextField
+                  label="Password"
+                  type="password"
+                  fullWidth
+                  {...register('password')}
+                  error={!!errors.password}
+                  helperText={errors.password?.message}
+                />
+              </>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

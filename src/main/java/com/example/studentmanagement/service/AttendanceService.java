@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class AttendanceService {
@@ -45,6 +46,17 @@ public class AttendanceService {
 
     public List<Attendance> getAttendanceByDate(LocalDate date) {
         return attendanceRepository.findByDate(date);
+    }
+
+    @Transactional
+    public Optional<Attendance> createAttendanceForTeacher(Attendance attendance, String teacherUsername) {
+        Optional<Enrollment> enrollmentOpt = enrollmentRepository.findById(attendance.getEnrollment().getId());
+        if (enrollmentOpt.isEmpty()) return Optional.empty();
+        Enrollment enrollment = enrollmentOpt.get();
+        String courseTeacher = enrollment.getCourse() != null ? enrollment.getCourse().getTeacher() : null;
+        if (!teacherUsername.equals(courseTeacher)) return Optional.empty();
+        attendance.setEnrollment(enrollment);
+        return Optional.of(attendanceRepository.save(attendance));
     }
 
     @Transactional

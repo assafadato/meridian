@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Typography, Grid, Card, CardContent, CircularProgress, Alert, Chip,
+  FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
@@ -12,7 +13,9 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { getDashboardStats } from '../api/dashboard';
-import type { DashboardStats } from '../types';
+import { getGrades } from '../api/grades';
+import { getCourses } from '../api/courses';
+import type { DashboardStats, GradeDetail, Course } from '../types';
 
 const COLORS = ['#667eea', '#764ba2', '#48bb78', '#f6ad55', '#fc8181', '#63b3ed'];
 
@@ -51,6 +54,9 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, subtitle
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [grades, setGrades] = useState<GradeDetail[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<number | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -59,10 +65,15 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const res = await getDashboardStats();
-        setStats(res.data);
-      } catch {
-        setError('Failed to load dashboard data');
+        const [statsRes, gradesRes, coursesRes] = await Promise.allSettled([
+          getDashboardStats(),
+          getGrades(),
+          getCourses(),
+        ]);
+        if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+        if (gradesRes.status === 'fulfilled') setGrades(gradesRes.value.data);
+        if (coursesRes.status === 'fulfilled') setCourses(coursesRes.value.data);
+        if (statsRes.status === 'rejected') setError('Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
@@ -85,12 +96,16 @@ const Dashboard: React.FC = () => {
       ]
     : [];
 
+  const filteredGrades = selectedCourseId === 'all'
+    ? grades
+    : grades.filter((g) => g.enrollment?.course?.id === selectedCourseId);
+
   const gradeBarData = [
-    { range: '90-100', count: 0 },
-    { range: '80-89', count: 0 },
-    { range: '70-79', count: 0 },
-    { range: '60-69', count: 0 },
-    { range: '<60', count: 0 },
+    { range: '90-100', count: filteredGrades.filter((g) => g.score >= 90).length },
+    { range: '80-89', count: filteredGrades.filter((g) => g.score >= 80 && g.score < 90).length },
+    { range: '70-79', count: filteredGrades.filter((g) => g.score >= 70 && g.score < 80).length },
+    { range: '60-69', count: filteredGrades.filter((g) => g.score >= 60 && g.score < 70).length },
+    { range: '<60', count: filteredGrades.filter((g) => g.score < 60).length },
   ];
 
   return (
@@ -179,8 +194,23 @@ const Dashboard: React.FC = () => {
         <Grid size={{ xs: 12, md: 6 }}>
           <Card elevation={1} sx={{ borderRadius: 3 }}>
             <CardContent>
-              <Typography variant="h6" fontWeight={600} gutterBottom>Grade Distribution (Sample)</Typography>
-              <ResponsiveContainer width="100%" height={240}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="h6" fontWeight={600}>Grade Distribution</Typography>
+                <FormControl size="small" sx={{ minWidth: 160 }}>
+                  <InputLabel>Course</InputLabel>
+                  <Select
+                    value={selectedCourseId}
+                    label="Course"
+                    onChange={(e) => setSelectedCourseId(e.target.value as number | 'all')}
+                  >
+                    <MenuItem value="all">All Courses</MenuItem>
+                    {courses.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={gradeBarData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="range" tick={{ fontSize: 12 }} />

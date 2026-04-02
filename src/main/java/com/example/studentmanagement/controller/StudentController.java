@@ -1,5 +1,6 @@
 package com.example.studentmanagement.controller;
 
+import com.example.studentmanagement.dto.CreateStudentRequest;
 import com.example.studentmanagement.model.Student;
 import com.example.studentmanagement.service.StudentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -28,10 +31,11 @@ public class StudentController {
     @Autowired
     private StudentService studentService;
 
-    @Operation(summary = "Get all students")
+    @Operation(summary = "Get all students (admin only)")
     @ApiResponse(responseCode = "200", description = "Successfully retrieved all students",
             content = @Content(schema = @Schema(implementation = Student.class)))
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public List<Student> getAllStudents() {
         return studentService.getAllStudents();
     }
@@ -43,6 +47,7 @@ public class StudentController {
         @ApiResponse(responseCode = "404", description = "Student not found")
     })
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Student> getStudentById(
             @Parameter(description = "ID of the student", required = true)
             @PathVariable Long id) {
@@ -53,21 +58,33 @@ public class StudentController {
         }
     }
 
-    @Operation(summary = "Create new student")
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Student successfully created",
-                content = @Content(schema = @Schema(implementation = Student.class))),
-        @ApiResponse(responseCode = "400", description = "Invalid input or email already exists")
-    })
+    @Operation(summary = "Create new student with login account (admin only)")
     @PostMapping
-    public ResponseEntity<Student> createStudent(
-            @Parameter(description = "Student details", required = true)
-            @Valid @RequestBody Student student) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Student> createStudent(@Valid @RequestBody CreateStudentRequest request) {
         try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(studentService.createStudent(student));
+            return ResponseEntity.status(HttpStatus.CREATED).body(studentService.createStudentWithAccount(request));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(null);
         }
+    }
+
+    @Operation(summary = "Get my student profile")
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<Student> getMyProfile(Authentication auth) {
+        return studentService.findByUsername(auth.getName())
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Update my student profile")
+    @PutMapping("/me")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<Student> updateMyProfile(@Valid @RequestBody Student details, Authentication auth) {
+        return studentService.findByUsername(auth.getName())
+                .map(s -> ResponseEntity.ok(studentService.updateStudent(s.getId(), details)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Update student")
@@ -77,6 +94,7 @@ public class StudentController {
         @ApiResponse(responseCode = "404", description = "Student not found")
     })
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Student> updateStudent(
             @Parameter(description = "ID of the student", required = true)
             @PathVariable Long id,
@@ -95,6 +113,7 @@ public class StudentController {
         @ApiResponse(responseCode = "404", description = "Student not found")
     })
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteStudent(
             @Parameter(description = "ID of the student", required = true)
             @PathVariable Long id) {

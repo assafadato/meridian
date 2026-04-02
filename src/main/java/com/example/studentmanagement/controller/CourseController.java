@@ -13,6 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -53,6 +55,13 @@ public class CourseController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @Operation(summary = "Get courses assigned to the authenticated teacher")
+    @GetMapping("/mine")
+    @PreAuthorize("hasRole('TEACHER')")
+    public List<Course> getMyCourses(Authentication auth) {
+        return courseRepository.findByTeacher(auth.getName());
+    }
+
     @Operation(summary = "Create new course")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Course successfully created",
@@ -60,6 +69,7 @@ public class CourseController {
         @ApiResponse(responseCode = "400", description = "Invalid input or course name already exists")
     })
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Course> createCourse(
             @Parameter(description = "Course details", required = true)
             @Valid @RequestBody Course course) {

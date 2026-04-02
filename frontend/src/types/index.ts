@@ -5,6 +5,12 @@ export interface Student {
   email: string;
   dateOfBirth: string;
   enrolledAt?: string;
+  linkedUser?: {
+    id?: number;
+    username?: string;
+    role?: string;
+    profilePhoto?: string;
+  };
 }
 
 export interface Course {
@@ -57,4 +63,24 @@ export interface User {
   username: string;
   role: string;
   token: string;
+}
+
+export interface Message {
+  id?: number;
+  fromUsername: string;
+  toUsername: string;
+  subject: string;
+  content: string;
+  sentAt?: string;
+  readByRecipient: boolean;
+}
+
+export interface GradeInquiry {
+  id?: number;
+  grade: GradeDetail;
+  student: Student;
+  message: string;
+  status: 'PENDING' | 'REVIEWED' | 'RESOLVED';
+  submittedAt?: string;
+  teacherResponse?: string;
 }

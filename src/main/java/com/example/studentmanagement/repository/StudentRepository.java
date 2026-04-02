@@ -26,4 +26,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
 
     @Query("SELECT DISTINCT s FROM Student s WHERE EXISTS (SELECT e FROM Enrollment e WHERE e.student = s AND e.course.name = :courseName)")
     List<Student> findByCourse(@Param("courseName") String courseName);
+
+    java.util.Optional<Student> findByLinkedUserUsername(String username);
 }
