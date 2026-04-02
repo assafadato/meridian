@@ -1,14 +1,15 @@
 package com.example.studentmanagement.controller;
 
 import com.example.studentmanagement.model.Attendance;
+import com.example.studentmanagement.repository.CourseRepository;
 import com.example.studentmanagement.service.AttendanceService;
+import com.example.studentmanagement.service.StudentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import com.example.studentmanagement.repository.CourseRepository;
-import com.example.studentmanagement.service.StudentService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,12 +23,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/attendance")
 @CrossOrigin(origins = "http://localhost:3000")
+@RequiredArgsConstructor
 @Tag(name = "Attendance Management", description = "APIs for managing student attendance")
 public class AttendanceController {
 
-    @Autowired private AttendanceService attendanceService;
-    @Autowired private StudentService studentService;
-    @Autowired private CourseRepository courseRepository;
+    private final AttendanceService attendanceService;
+    private final StudentService studentService;
+    private final CourseRepository courseRepository;
 
     @Operation(summary = "Get my attendance (student)")
     @GetMapping("/me")
@@ -92,8 +94,14 @@ public class AttendanceController {
     @Operation(summary = "Create attendance — admin only for bulk operations")
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Attendance> createAttendance(@Valid @RequestBody Attendance attendance) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(attendanceService.createAttendance(attendance));
+    public ResponseEntity<?> createAttendance(@Valid @RequestBody Attendance attendance) {
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(attendanceService.createAttendance(attendance));
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("An attendance record already exists for this student on this date");
+        }
     }
 
     @Operation(summary = "Teacher adds attendance for their own course enrollment")
@@ -104,10 +112,15 @@ public class AttendanceController {
         if (attendance.getEnrollment() == null || attendance.getEnrollment().getId() == null) {
             return ResponseEntity.badRequest().body("Enrollment is required");
         }
-        return attendanceService.createAttendanceForTeacher(attendance, auth.getName())
-                .map(a -> ResponseEntity.status(HttpStatus.CREATED).<Object>body(a))
-                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("Enrollment not found or you are not the teacher of this course"));
+        try {
+            return attendanceService.createAttendanceForTeacher(attendance, auth.getName())
+                    .map(a -> ResponseEntity.status(HttpStatus.CREATED).<Object>body(a))
+                    .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
+                            .body("Enrollment not found or you are not the teacher of this course"));
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("An attendance record already exists for this student on this date");
+        }
     }
 
     @Operation(summary = "Update an attendance record")

@@ -1,12 +1,11 @@
 package com.example.studentmanagement.service;
 
 import com.example.studentmanagement.model.Attendance;
-import com.example.studentmanagement.model.Attendance.AttendanceStatus;
 import com.example.studentmanagement.model.Enrollment;
 import com.example.studentmanagement.repository.AttendanceRepository;
 import com.example.studentmanagement.repository.EnrollmentRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,13 +14,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class AttendanceService {
 
-    @Autowired
-    private AttendanceRepository attendanceRepository;
-
-    @Autowired
-    private EnrollmentRepository enrollmentRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public List<Attendance> getAllAttendance() {
         return attendanceRepository.findAll();
@@ -29,7 +26,8 @@ public class AttendanceService {
 
     public Attendance getAttendanceById(Long id) {
         return attendanceRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Attendance record not found with id: " + id));
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Attendance record not found with id: " + id));
     }
 
     public List<Attendance> getAttendanceByEnrollment(Long enrollmentId) {
@@ -50,19 +48,20 @@ public class AttendanceService {
 
     @Transactional
     public Optional<Attendance> createAttendanceForTeacher(Attendance attendance, String teacherUsername) {
-        Optional<Enrollment> enrollmentOpt = enrollmentRepository.findById(attendance.getEnrollment().getId());
-        if (enrollmentOpt.isEmpty()) return Optional.empty();
-        Enrollment enrollment = enrollmentOpt.get();
-        String courseTeacher = enrollment.getCourse() != null ? enrollment.getCourse().getTeacher() : null;
-        if (!teacherUsername.equals(courseTeacher)) return Optional.empty();
-        attendance.setEnrollment(enrollment);
-        return Optional.of(attendanceRepository.save(attendance));
+        return enrollmentRepository.findById(attendance.getEnrollment().getId())
+                .filter(e -> teacherUsername.equals(
+                        e.getCourse() != null ? e.getCourse().getTeacher() : null))
+                .map(enrollment -> {
+                    attendance.setEnrollment(enrollment);
+                    return attendanceRepository.save(attendance);
+                });
     }
 
     @Transactional
     public Attendance createAttendance(Attendance attendance) {
         if (attendance.getEnrollment() != null && attendance.getEnrollment().getId() != null) {
-            Enrollment enrollment = enrollmentRepository.findById(attendance.getEnrollment().getId())
+            Enrollment enrollment = enrollmentRepository
+                    .findById(attendance.getEnrollment().getId())
                     .orElseThrow(() -> new EntityNotFoundException(
                             "Enrollment not found with id: " + attendance.getEnrollment().getId()));
             attendance.setEnrollment(enrollment);

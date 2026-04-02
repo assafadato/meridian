@@ -4,20 +4,20 @@ import com.example.studentmanagement.model.Course;
 import com.example.studentmanagement.model.Enrollment;
 import com.example.studentmanagement.repository.CourseRepository;
 import com.example.studentmanagement.repository.EnrollmentRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class CourseService {
 
-    @Autowired
-    private CourseRepository courseRepository;
-
-    @Autowired
-    private EnrollmentRepository enrollmentRepository;
+    private final CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public List<Course> getAllCourses() {
         return courseRepository.findAll();
@@ -44,18 +44,16 @@ public class CourseService {
 
     public boolean deleteCourse(Long id) {
         return courseRepository.findById(id)
-                .map(course -> {
-                    courseRepository.delete(course);
-                    return true;
-                })
+                .map(course -> { courseRepository.delete(course); return true; })
                 .orElse(false);
     }
 
     public Map<String, Object> getCourseStatistics() {
-        List<Course> allCourses = courseRepository.findAll();
+        List<Course> allCourses    = courseRepository.findAll();
         List<Enrollment> allEnrollments = enrollmentRepository.findAll();
 
-        int totalCourses = allCourses.size();
+        int totalCourses         = allCourses.size();
+        int totalStudentsEnrolled = allEnrollments.size();
 
         Map<Integer, Long> coursesByCredits = allCourses.stream()
                 .filter(c -> c.getCredits() != null)
@@ -67,29 +65,23 @@ public class CourseService {
                 .average()
                 .orElse(0.0);
 
-        int totalStudentsEnrolled = allEnrollments.size();
-
-        Map<Course, Long> coursesEnrollmentCount = allEnrollments.stream()
-                .collect(Collectors.groupingBy(Enrollment::getCourse, Collectors.counting()));
-
-        List<Map<String, Object>> popularCourses = coursesEnrollmentCount.entrySet().stream()
+        // Top-5 most enrolled courses
+        List<Map<String, Object>> popularCourses = allEnrollments.stream()
+                .collect(Collectors.groupingBy(Enrollment::getCourse, Collectors.counting()))
+                .entrySet().stream()
                 .sorted(Map.Entry.<Course, Long>comparingByValue().reversed())
                 .limit(5)
-                .map(entry -> {
-                    Map<String, Object> courseData = new HashMap<>();
-                    courseData.put("name", entry.getKey().getName());
-                    courseData.put("enrollmentCount", entry.getValue());
-                    return courseData;
-                })
-                .collect(Collectors.toList());
+                .map(e -> Map.<String, Object>of(
+                        "name", e.getKey().getName(),
+                        "enrollmentCount", e.getValue()))
+                .toList();
 
-        Map<String, Object> statistics = new HashMap<>();
-        statistics.put("totalCourses", totalCourses);
-        statistics.put("coursesByCredits", coursesByCredits);
-        statistics.put("averageCredits", averageCredits);
-        statistics.put("totalStudentsEnrolled", totalStudentsEnrolled);
-        statistics.put("popularCourses", popularCourses);
-
-        return statistics;
+        return Map.of(
+                "totalCourses",          totalCourses,
+                "coursesByCredits",      coursesByCredits,
+                "averageCredits",        averageCredits,
+                "totalStudentsEnrolled", totalStudentsEnrolled,
+                "popularCourses",        popularCourses
+        );
     }
 }

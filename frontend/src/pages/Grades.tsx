@@ -100,6 +100,9 @@ const Grades: React.FC = () => {
     setModalOpen(true);
   };
 
+  /** Convert a plain date string "YYYY-MM-DD" → "YYYY-MM-DDT00:00:00" for LocalDateTime on backend. */
+  const toDateTime = (date?: string) => (date ? `${date}T00:00:00` : undefined);
+
   const onSubmit = async (data: FormData) => {
     setSaving(true);
     try {
@@ -107,14 +110,14 @@ const Grades: React.FC = () => {
         await updateGrade(editingGrade.id, {
           score: data.score,
           gradeType: data.gradeType,
-          gradedAt: data.gradedAt,
+          gradedAt: toDateTime(data.gradedAt),   // backend needs LocalDateTime format
         });
       } else {
         await createGrade({
           enrollment: { id: data.enrollmentId },
           score: data.score,
           gradeType: data.gradeType,
-          gradedAt: data.gradedAt,
+          // omit gradedAt — @PrePersist on Grade sets it to LocalDateTime.now()
         });
       }
       setModalOpen(false);
