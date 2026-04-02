@@ -13,23 +13,21 @@ import GradeIcon from '@mui/icons-material/Grade';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { Grade, Student, Course } from '../types';
-import axiosInstance from '../api/axiosInstance';
-import { getStudents } from '../api/students';
-import { getCourses } from '../api/courses';
+import type { GradeDetail, Enrollment } from '../types';
+import { getGrades, createGrade, updateGrade, deleteGrade } from '../api/grades';
+import { getEnrollments } from '../api/enrollments';
 
 const schema = z.object({
-  studentId: z.coerce.number().min(1, 'Student is required'),
-  courseId: z.coerce.number().min(1, 'Course is required'),
-  score: z.coerce.number().min(0).max(100),
+  enrollmentId: z.coerce.number().min(1, 'Enrollment is required'),
+  score: z.coerce.number().min(0, 'Min 0').max(100, 'Max 100'),
   gradeType: z.string().min(1, 'Grade type is required'),
-  gradedAt: z.string().min(1, 'Date is required'),
+  gradedAt: z.string().optional(),
 });
 
 type FormInput = z.input<typeof schema>;
 type FormData = z.output<typeof schema>;
 
-const GRADE_TYPES = ['QUIZ', 'MIDTERM', 'FINAL', 'HOMEWORK', 'PROJECT'];
+const GRADE_TYPES = ['QUIZ', 'MIDTERM', 'FINAL', 'HOMEWORK', 'PROJECT', 'ASSIGNMENT'];
 
 const scoreToLetter = (score: number) => {
   if (score >= 90) return { label: 'A', color: 'success' as const };
@@ -40,18 +38,16 @@ const scoreToLetter = (score: number) => {
 };
 
 const Grades: React.FC = () => {
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [grades, setGrades] = useState<GradeDetail[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
+  const [editingGrade, setEditingGrade] = useState<GradeDetail | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [gradeToDelete, setGradeToDelete] = useState<Grade | null>(null);
+  const [gradeToDelete, setGradeToDelete] = useState<GradeDetail | null>(null);
   const [saving, setSaving] = useState(false);
-  const [apiUnavailable, setApiUnavailable] = useState(false);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormInput, unknown, FormData>({
     resolver: zodResolver(schema),
@@ -61,20 +57,14 @@ const Grades: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [gradesRes, studentsRes, coursesRes] = await Promise.allSettled([
-        axiosInstance.get<Grade[]>('/grades'),
-        getStudents(),
-        getCourses(),
+      const [gradesRes, enrollmentsRes] = await Promise.allSettled([
+        getGrades(),
+        getEnrollments(),
       ]);
-      if (gradesRes.status === 'fulfilled') {
-        setGrades(gradesRes.value.data);
-      } else {
-        setApiUnavailable(true);
-      }
-      if (studentsRes.status === 'fulfilled') setStudents(studentsRes.value.data);
-      if (coursesRes.status === 'fulfilled') setCourses(coursesRes.value.data);
+      if (gradesRes.status === 'fulfilled') setGrades(gradesRes.value.data);
+      if (enrollmentsRes.status === 'fulfilled') setEnrollments(enrollmentsRes.value.data);
     } catch {
-      setError('Failed to load grades');
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -83,32 +73,29 @@ const Grades: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const filtered = grades.filter((g) => {
-    const student = students.find((s) => s.id === g.studentId);
-    const course = courses.find((c) => c.id === g.courseId);
+    if (!search.trim()) return true;
     const term = search.toLowerCase();
     return (
-      !term ||
-      student?.firstName?.toLowerCase().includes(term) ||
-      student?.lastName?.toLowerCase().includes(term) ||
-      course?.name?.toLowerCase().includes(term) ||
+      g.enrollment?.student?.firstName?.toLowerCase().includes(term) ||
+      g.enrollment?.student?.lastName?.toLowerCase().includes(term) ||
+      g.enrollment?.course?.name?.toLowerCase().includes(term) ||
       g.gradeType?.toLowerCase().includes(term)
     );
   });
 
   const openCreate = () => {
     setEditingGrade(null);
-    reset({ studentId: 0, courseId: 0, score: 0, gradeType: '', gradedAt: new Date().toISOString().split('T')[0] });
+    reset({ enrollmentId: 0, score: 0, gradeType: '', gradedAt: new Date().toISOString().split('T')[0] });
     setModalOpen(true);
   };
 
-  const openEdit = (grade: Grade) => {
+  const openEdit = (grade: GradeDetail) => {
     setEditingGrade(grade);
     reset({
-      studentId: grade.studentId,
-      courseId: grade.courseId,
+      enrollmentId: grade.enrollment?.id ?? 0,
       score: grade.score,
       gradeType: grade.gradeType,
-      gradedAt: grade.gradedAt,
+      gradedAt: grade.gradedAt ? grade.gradedAt.split('T')[0] : '',
     });
     setModalOpen(true);
   };
@@ -117,20 +104,29 @@ const Grades: React.FC = () => {
     setSaving(true);
     try {
       if (editingGrade?.id) {
-        await axiosInstance.put(`/grades/${editingGrade.id}`, data);
+        await updateGrade(editingGrade.id, {
+          score: data.score,
+          gradeType: data.gradeType,
+          gradedAt: data.gradedAt,
+        });
       } else {
-        await axiosInstance.post('/grades', data);
+        await createGrade({
+          enrollment: { id: data.enrollmentId },
+          score: data.score,
+          gradeType: data.gradeType,
+          gradedAt: data.gradedAt,
+        });
       }
       setModalOpen(false);
       fetchAll();
     } catch {
-      setError('Failed to save grade. The grades API may not be available yet.');
+      setError('Failed to save grade');
     } finally {
       setSaving(false);
     }
   };
 
-  const confirmDelete = (grade: Grade) => {
+  const confirmDelete = (grade: GradeDetail) => {
     setGradeToDelete(grade);
     setDeleteDialogOpen(true);
   };
@@ -138,7 +134,7 @@ const Grades: React.FC = () => {
   const handleDelete = async () => {
     if (!gradeToDelete?.id) return;
     try {
-      await axiosInstance.delete(`/grades/${gradeToDelete.id}`);
+      await deleteGrade(gradeToDelete.id);
       setDeleteDialogOpen(false);
       fetchAll();
     } catch {
@@ -158,12 +154,6 @@ const Grades: React.FC = () => {
           Add Grade
         </Button>
       </Box>
-
-      {apiUnavailable && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          The grades API endpoint is not yet available on the backend. Data shown here is for demonstration.
-        </Alert>
-      )}
 
       <TextField
         fullWidth
@@ -205,15 +195,15 @@ const Grades: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : filtered.map((grade) => {
-              const student = students.find((s) => s.id === grade.studentId);
-              const course = courses.find((c) => c.id === grade.courseId);
               const letter = scoreToLetter(grade.score);
               return (
                 <TableRow key={grade.id} hover>
                   <TableCell>
-                    {student ? `${student.firstName} ${student.lastName}` : `Student #${grade.studentId}`}
+                    {grade.enrollment?.student
+                      ? `${grade.enrollment.student.firstName} ${grade.enrollment.student.lastName}`
+                      : '—'}
                   </TableCell>
-                  <TableCell>{course?.name ?? `Course #${grade.courseId}`}</TableCell>
+                  <TableCell>{grade.enrollment?.course?.name ?? '—'}</TableCell>
                   <TableCell>
                     <Chip label={grade.gradeType} size="small" variant="outlined" />
                   </TableCell>
@@ -221,7 +211,7 @@ const Grades: React.FC = () => {
                   <TableCell>
                     <Chip label={letter.label} size="small" color={letter.color} />
                   </TableCell>
-                  <TableCell>{grade.gradedAt}</TableCell>
+                  <TableCell>{grade.gradedAt ? grade.gradedAt.split('T')[0] : '—'}</TableCell>
                   <TableCell align="right">
                     <Tooltip title="Edit">
                       <IconButton size="small" color="primary" onClick={() => openEdit(grade)}>
@@ -246,39 +236,25 @@ const Grades: React.FC = () => {
         <DialogTitle>{editingGrade ? 'Edit Grade' : 'Add Grade'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <FormControl fullWidth error={!!errors.studentId}>
-              <InputLabel>Student</InputLabel>
-              <Controller
-                name="studentId"
-                control={control}
-                render={({ field }) => (
-                  <Select {...field} label="Student">
-                    {students.map((s) => (
-                      <MenuItem key={s.id} value={s.id}>
-                        {s.firstName} {s.lastName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                )}
-              />
-              {errors.studentId && <FormHelperText>{errors.studentId.message}</FormHelperText>}
-            </FormControl>
-
-            <FormControl fullWidth error={!!errors.courseId}>
-              <InputLabel>Course</InputLabel>
-              <Controller
-                name="courseId"
-                control={control}
-                render={({ field }) => (
-                  <Select {...field} label="Course">
-                    {courses.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
-                  </Select>
-                )}
-              />
-              {errors.courseId && <FormHelperText>{errors.courseId.message}</FormHelperText>}
-            </FormControl>
+            {!editingGrade && (
+              <FormControl fullWidth error={!!errors.enrollmentId}>
+                <InputLabel>Enrollment (Student → Course)</InputLabel>
+                <Controller
+                  name="enrollmentId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select {...field} label="Enrollment (Student → Course)">
+                      {enrollments.map((e) => (
+                        <MenuItem key={e.id} value={e.id}>
+                          {e.student?.firstName} {e.student?.lastName} → {e.course?.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  )}
+                />
+                {errors.enrollmentId && <FormHelperText>{errors.enrollmentId.message}</FormHelperText>}
+              </FormControl>
+            )}
 
             <FormControl fullWidth error={!!errors.gradeType}>
               <InputLabel>Grade Type</InputLabel>
@@ -302,7 +278,7 @@ const Grades: React.FC = () => {
                 {...register('score')}
                 error={!!errors.score}
                 helperText={errors.score?.message}
-                inputProps={{ min: 0, max: 100 }}
+                inputProps={{ min: 0, max: 100, step: 0.1 }}
               />
               <TextField
                 label="Date"

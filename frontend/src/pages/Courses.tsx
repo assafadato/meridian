@@ -19,7 +19,7 @@ import { getCourses, createCourse, updateCourse, deleteCourse, searchCourses } f
 const schema = z.object({
   name: z.string().min(1, 'Course name is required').max(100),
   description: z.string().min(1, 'Description is required').max(500),
-  gradeLevel: z.coerce.number().int().min(1).max(12).optional(),
+  teacher: z.string().optional(),
   credits: z.coerce.number().int().min(1).max(10).optional(),
 });
 
@@ -73,7 +73,7 @@ const Courses: React.FC = () => {
 
   const openCreate = () => {
     setEditingCourse(null);
-    reset({ name: '', description: '', gradeLevel: undefined, credits: undefined });
+    reset({ name: '', description: '', teacher: '', credits: undefined });
     setModalOpen(true);
   };
 
@@ -82,7 +82,7 @@ const Courses: React.FC = () => {
     reset({
       name: course.name,
       description: course.description,
-      gradeLevel: course.gradeLevel,
+      teacher: course.teacher ?? '',
       credits: course.credits,
     });
     setModalOpen(true);
@@ -158,22 +158,21 @@ const Courses: React.FC = () => {
               <TableCell><strong>ID</strong></TableCell>
               <TableCell><strong>Name</strong></TableCell>
               <TableCell><strong>Description</strong></TableCell>
-              <TableCell><strong>Grade Level</strong></TableCell>
+              <TableCell><strong>Teacher</strong></TableCell>
               <TableCell><strong>Credits</strong></TableCell>
-              <TableCell><strong>Students</strong></TableCell>
               <TableCell align="right"><strong>Actions</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : courses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                   No courses found
                 </TableCell>
               </TableRow>
@@ -184,18 +183,11 @@ const Courses: React.FC = () => {
                 <TableCell sx={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {course.description}
                 </TableCell>
-                <TableCell>
-                  {course.gradeLevel != null && (
-                    <Chip label={`Grade ${course.gradeLevel}`} size="small" color="secondary" />
-                  )}
-                </TableCell>
+                <TableCell>{course.teacher ?? '—'}</TableCell>
                 <TableCell>
                   {course.credits != null && (
                     <Chip label={`${course.credits} cr`} size="small" variant="outlined" />
                   )}
-                </TableCell>
-                <TableCell>
-                  <Chip label={course.students?.length ?? 0} size="small" />
                 </TableCell>
                 <TableCell align="right">
                   <Tooltip title="Edit">
@@ -236,26 +228,22 @@ const Courses: React.FC = () => {
               error={!!errors.description}
               helperText={errors.description?.message}
             />
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Grade Level"
-                type="number"
-                fullWidth
-                {...register('gradeLevel')}
-                error={!!errors.gradeLevel}
-                helperText={errors.gradeLevel?.message}
-                inputProps={{ min: 1, max: 12 }}
-              />
-              <TextField
-                label="Credits"
-                type="number"
-                fullWidth
-                {...register('credits')}
-                error={!!errors.credits}
-                helperText={errors.credits?.message}
-                inputProps={{ min: 1, max: 10 }}
-              />
-            </Box>
+            <TextField
+              label="Teacher"
+              fullWidth
+              {...register('teacher')}
+              error={!!errors.teacher}
+              helperText={errors.teacher?.message}
+            />
+            <TextField
+              label="Credits"
+              type="number"
+              fullWidth
+              {...register('credits')}
+              error={!!errors.credits}
+              helperText={errors.credits?.message}
+              inputProps={{ min: 1, max: 10 }}
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

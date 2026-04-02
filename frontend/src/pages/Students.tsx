@@ -17,20 +17,13 @@ import type { Student } from '../types';
 import { getStudents, createStudent, updateStudent, deleteStudent, searchStudents } from '../api/students';
 
 const schema = z.object({
-  identifier: z.string().min(1, 'Identifier is required'),
-  firstName: z.string().min(1, 'First name is required').max(15, 'Max 15 characters'),
-  lastName: z.string().min(1, 'Last name is required').max(15, 'Max 15 characters'),
-  address: z.string().min(1, 'Address is required'),
-  year: z.coerce.number().int().min(1).max(6),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Valid email is required'),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
 });
 
-type FormInput = z.input<typeof schema>;
-type FormData = z.output<typeof schema>;
-
-const YEAR_COLORS: Record<number, 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error'> = {
-  1: 'primary', 2: 'secondary', 3: 'success', 4: 'warning', 5: 'error', 6: 'default',
-};
+type FormData = z.infer<typeof schema>;
 
 const Students: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -44,7 +37,7 @@ const Students: React.FC = () => {
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormInput, unknown, FormData>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
@@ -79,18 +72,16 @@ const Students: React.FC = () => {
 
   const openCreate = () => {
     setEditingStudent(null);
-    reset({ identifier: '', firstName: '', lastName: '', address: '', year: 1, dateOfBirth: '' });
+    reset({ firstName: '', lastName: '', email: '', dateOfBirth: '' });
     setModalOpen(true);
   };
 
   const openEdit = (student: Student) => {
     setEditingStudent(student);
     reset({
-      identifier: student.identifier,
       firstName: student.firstName,
       lastName: student.lastName,
-      address: student.address,
-      year: student.year,
+      email: student.email,
       dateOfBirth: student.dateOfBirth,
     });
     setModalOpen(true);
@@ -100,9 +91,9 @@ const Students: React.FC = () => {
     setSaving(true);
     try {
       if (editingStudent?.id) {
-        await updateStudent(editingStudent.id, data as Student);
+        await updateStudent(editingStudent.id, data);
       } else {
-        await createStudent(data as Student);
+        await createStudent(data);
       }
       setModalOpen(false);
       fetchStudents();
@@ -164,25 +155,22 @@ const Students: React.FC = () => {
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
               <TableCell><strong>ID</strong></TableCell>
-              <TableCell><strong>Identifier</strong></TableCell>
               <TableCell><strong>Name</strong></TableCell>
+              <TableCell><strong>Email</strong></TableCell>
               <TableCell><strong>Date of Birth</strong></TableCell>
-              <TableCell><strong>Year</strong></TableCell>
-              <TableCell><strong>Address</strong></TableCell>
-              <TableCell><strong>Courses</strong></TableCell>
               <TableCell align="right"><strong>Actions</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : students.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                   No students found
                 </TableCell>
               </TableRow>
@@ -190,25 +178,10 @@ const Students: React.FC = () => {
               <TableRow key={student.id} hover>
                 <TableCell>{student.id}</TableCell>
                 <TableCell>
-                  <Chip label={student.identifier} size="small" variant="outlined" />
-                </TableCell>
-                <TableCell>
                   <strong>{student.firstName} {student.lastName}</strong>
                 </TableCell>
+                <TableCell>{student.email}</TableCell>
                 <TableCell>{student.dateOfBirth}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={`Year ${student.year}`}
-                    size="small"
-                    color={YEAR_COLORS[student.year] ?? 'default'}
-                  />
-                </TableCell>
-                <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {student.address}
-                </TableCell>
-                <TableCell>
-                  <Chip label={student.courses?.length ?? 0} size="small" />
-                </TableCell>
                 <TableCell align="right">
                   <Tooltip title="Edit">
                     <IconButton size="small" color="primary" onClick={() => openEdit(student)}>
@@ -232,13 +205,6 @@ const Students: React.FC = () => {
         <DialogTitle>{editingStudent ? 'Edit Student' : 'Add Student'}</DialogTitle>
         <DialogContent>
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              label="Identifier"
-              fullWidth
-              {...register('identifier')}
-              error={!!errors.identifier}
-              helperText={errors.identifier?.message}
-            />
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 label="First Name"
@@ -256,32 +222,22 @@ const Students: React.FC = () => {
               />
             </Box>
             <TextField
-              label="Address"
+              label="Email"
+              type="email"
               fullWidth
-              {...register('address')}
-              error={!!errors.address}
-              helperText={errors.address?.message}
+              {...register('email')}
+              error={!!errors.email}
+              helperText={errors.email?.message}
             />
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Study Year"
-                type="number"
-                fullWidth
-                {...register('year')}
-                error={!!errors.year}
-                helperText={errors.year?.message}
-                inputProps={{ min: 1, max: 6 }}
-              />
-              <TextField
-                label="Date of Birth"
-                type="date"
-                fullWidth
-                {...register('dateOfBirth')}
-                error={!!errors.dateOfBirth}
-                helperText={errors.dateOfBirth?.message}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Box>
+            <TextField
+              label="Date of Birth"
+              type="date"
+              fullWidth
+              {...register('dateOfBirth')}
+              error={!!errors.dateOfBirth}
+              helperText={errors.dateOfBirth?.message}
+              InputLabelProps={{ shrink: true }}
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>

@@ -13,14 +13,12 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { Attendance, Student, Course } from '../types';
-import axiosInstance from '../api/axiosInstance';
-import { getStudents } from '../api/students';
-import { getCourses } from '../api/courses';
+import type { AttendanceDetail, Enrollment } from '../types';
+import { getAllAttendance, createAttendance, updateAttendance, deleteAttendance } from '../api/attendance';
+import { getEnrollments } from '../api/enrollments';
 
 const schema = z.object({
-  studentId: z.coerce.number().min(1, 'Student is required'),
-  courseId: z.coerce.number().min(1, 'Course is required'),
+  enrollmentId: z.coerce.number().min(1, 'Enrollment is required'),
   date: z.string().min(1, 'Date is required'),
   status: z.enum(['PRESENT', 'ABSENT', 'LATE']),
 });
@@ -35,19 +33,17 @@ const STATUS_CONFIG = {
 };
 
 const AttendancePage: React.FC = () => {
-  const [records, setRecords] = useState<Attendance[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [records, setRecords] = useState<AttendanceDetail[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<Attendance | null>(null);
+  const [editingRecord, setEditingRecord] = useState<AttendanceDetail | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<Attendance | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<AttendanceDetail | null>(null);
   const [saving, setSaving] = useState(false);
-  const [apiUnavailable, setApiUnavailable] = useState(false);
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormInput, unknown, FormData>({
     resolver: zodResolver(schema),
@@ -57,18 +53,12 @@ const AttendancePage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [attRes, studentsRes, coursesRes] = await Promise.allSettled([
-        axiosInstance.get<Attendance[]>('/attendance'),
-        getStudents(),
-        getCourses(),
+      const [attRes, enrollmentsRes] = await Promise.allSettled([
+        getAllAttendance(),
+        getEnrollments(),
       ]);
-      if (attRes.status === 'fulfilled') {
-        setRecords(attRes.value.data);
-      } else {
-        setApiUnavailable(true);
-      }
-      if (studentsRes.status === 'fulfilled') setStudents(studentsRes.value.data);
-      if (coursesRes.status === 'fulfilled') setCourses(coursesRes.value.data);
+      if (attRes.status === 'fulfilled') setRecords(attRes.value.data);
+      if (enrollmentsRes.status === 'fulfilled') setEnrollments(enrollmentsRes.value.data);
     } catch {
       setError('Failed to load attendance');
     } finally {
@@ -79,13 +69,11 @@ const AttendancePage: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const filtered = records.filter((r) => {
-    const student = students.find((s) => s.id === r.studentId);
-    const course = courses.find((c) => c.id === r.courseId);
     const term = search.toLowerCase();
     const matchesSearch = !term ||
-      student?.firstName?.toLowerCase().includes(term) ||
-      student?.lastName?.toLowerCase().includes(term) ||
-      course?.name?.toLowerCase().includes(term);
+      r.enrollment?.student?.firstName?.toLowerCase().includes(term) ||
+      r.enrollment?.student?.lastName?.toLowerCase().includes(term) ||
+      r.enrollment?.course?.name?.toLowerCase().includes(term);
     const matchesStatus = !filterStatus || r.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -98,13 +86,17 @@ const AttendancePage: React.FC = () => {
 
   const openCreate = () => {
     setEditingRecord(null);
-    reset({ studentId: 0, courseId: 0, date: new Date().toISOString().split('T')[0], status: 'PRESENT' });
+    reset({ enrollmentId: 0, date: new Date().toISOString().split('T')[0], status: 'PRESENT' });
     setModalOpen(true);
   };
 
-  const openEdit = (record: Attendance) => {
+  const openEdit = (record: AttendanceDetail) => {
     setEditingRecord(record);
-    reset({ studentId: record.studentId, courseId: record.courseId, date: record.date, status: record.status });
+    reset({
+      enrollmentId: record.enrollment?.id ?? 0,
+      date: record.date,
+      status: record.status,
+    });
     setModalOpen(true);
   };
 
@@ -112,20 +104,24 @@ const AttendancePage: React.FC = () => {
     setSaving(true);
     try {
       if (editingRecord?.id) {
-        await axiosInstance.put(`/attendance/${editingRecord.id}`, data);
+        await updateAttendance(editingRecord.id, { date: data.date, status: data.status });
       } else {
-        await axiosInstance.post('/attendance', data);
+        await createAttendance({
+          enrollment: { id: data.enrollmentId },
+          date: data.date,
+          status: data.status,
+        });
       }
       setModalOpen(false);
       fetchAll();
     } catch {
-      setError('Failed to save attendance. The attendance API may not be available yet.');
+      setError('Failed to save attendance record');
     } finally {
       setSaving(false);
     }
   };
 
-  const confirmDelete = (record: Attendance) => {
+  const confirmDelete = (record: AttendanceDetail) => {
     setRecordToDelete(record);
     setDeleteDialogOpen(true);
   };
@@ -133,7 +129,7 @@ const AttendancePage: React.FC = () => {
   const handleDelete = async () => {
     if (!recordToDelete?.id) return;
     try {
-      await axiosInstance.delete(`/attendance/${recordToDelete.id}`);
+      await deleteAttendance(recordToDelete.id);
       setDeleteDialogOpen(false);
       fetchAll();
     } catch {
@@ -156,16 +152,10 @@ const AttendancePage: React.FC = () => {
 
       {/* Summary chips */}
       <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <Chip icon={<span>✓</span>} label={`Present: ${summary.present}`} color="success" variant="outlined" />
-        <Chip icon={<span>✗</span>} label={`Absent: ${summary.absent}`} color="error" variant="outlined" />
-        <Chip icon={<span>~</span>} label={`Late: ${summary.late}`} color="warning" variant="outlined" />
+        <Chip label={`Present: ${summary.present}`} color="success" variant="outlined" />
+        <Chip label={`Absent: ${summary.absent}`} color="error" variant="outlined" />
+        <Chip label={`Late: ${summary.late}`} color="warning" variant="outlined" />
       </Box>
-
-      {apiUnavailable && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          The attendance API endpoint is not yet available on the backend. Data shown here is for demonstration.
-        </Alert>
-      )}
 
       <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
         <TextField
@@ -219,15 +209,15 @@ const AttendancePage: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : filtered.map((record) => {
-              const student = students.find((s) => s.id === record.studentId);
-              const course = courses.find((c) => c.id === record.courseId);
               const config = STATUS_CONFIG[record.status];
               return (
                 <TableRow key={record.id} hover>
                   <TableCell>
-                    {student ? `${student.firstName} ${student.lastName}` : `Student #${record.studentId}`}
+                    {record.enrollment?.student
+                      ? `${record.enrollment.student.firstName} ${record.enrollment.student.lastName}`
+                      : '—'}
                   </TableCell>
-                  <TableCell>{course?.name ?? `Course #${record.courseId}`}</TableCell>
+                  <TableCell>{record.enrollment?.course?.name ?? '—'}</TableCell>
                   <TableCell>{record.date}</TableCell>
                   <TableCell>
                     <Chip label={config.label} size="small" color={config.color} />
@@ -256,39 +246,25 @@ const AttendancePage: React.FC = () => {
         <DialogTitle>{editingRecord ? 'Edit Attendance' : 'Record Attendance'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <FormControl fullWidth error={!!errors.studentId}>
-              <InputLabel>Student</InputLabel>
-              <Controller
-                name="studentId"
-                control={control}
-                render={({ field }) => (
-                  <Select {...field} label="Student">
-                    {students.map((s) => (
-                      <MenuItem key={s.id} value={s.id}>
-                        {s.firstName} {s.lastName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                )}
-              />
-              {errors.studentId && <FormHelperText>{errors.studentId.message}</FormHelperText>}
-            </FormControl>
-
-            <FormControl fullWidth error={!!errors.courseId}>
-              <InputLabel>Course</InputLabel>
-              <Controller
-                name="courseId"
-                control={control}
-                render={({ field }) => (
-                  <Select {...field} label="Course">
-                    {courses.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
-                  </Select>
-                )}
-              />
-              {errors.courseId && <FormHelperText>{errors.courseId.message}</FormHelperText>}
-            </FormControl>
+            {!editingRecord && (
+              <FormControl fullWidth error={!!errors.enrollmentId}>
+                <InputLabel>Enrollment (Student → Course)</InputLabel>
+                <Controller
+                  name="enrollmentId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select {...field} label="Enrollment (Student → Course)">
+                      {enrollments.map((e) => (
+                        <MenuItem key={e.id} value={e.id}>
+                          {e.student?.firstName} {e.student?.lastName} → {e.course?.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  )}
+                />
+                {errors.enrollmentId && <FormHelperText>{errors.enrollmentId.message}</FormHelperText>}
+              </FormControl>
+            )}
 
             <TextField
               label="Date"
