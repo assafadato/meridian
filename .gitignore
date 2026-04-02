@@ -1,0 +1,27 @@
+# Maven build output
+target/
+*.jar
+*.war
+*.class
+
+# H2 database files
+data/studentdb.mv.db
+data/studentdb.trace.db
+
+# MySQL Docker volume data
+data/mysql/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+.vscode/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Spring Boot local config overrides
+backend/src/main/resources/application-local.yml
