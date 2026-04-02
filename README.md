@@ -16,6 +16,7 @@ Meridian is a full-stack student management platform built with **Spring Boot** 
 - [API Documentation](#api-documentation)
 - [Project Structure](#project-structure)
 - [Role Reference](#role-reference)
+- [Java 21 Modernisation](#java-21-modernisation)
 
 ---
 
@@ -54,7 +55,8 @@ Meridian is a full-stack student management platform built with **Spring Boot** 
 
 | Layer | Technology |
 |---|---|
-| Backend | Java 17 · Spring Boot 3 · Spring Security · Spring Data JPA |
+| Backend | **Java 21** · Spring Boot 3.2 · Spring Security · Spring Data JPA |
+| Concurrency | **Project Loom virtual threads** (`spring.threads.virtual.enabled=true`) |
 | Database | MySQL 8 (Docker) · Hibernate DDL auto-update |
 | Authentication | JWT (HS256) · BCrypt password hashing |
 | Frontend | React 18 · TypeScript · Vite |
@@ -94,10 +96,16 @@ Meridian is a full-stack student management platform built with **Spring Boot** 
 
 ### Prerequisites
 
-- **Java 17+**
+- **Java 21+** (Amazon Corretto 21 or any OpenJDK 21 distribution)
 - **Maven 3.8+**
 - **Node.js 18+** and npm
 - **Docker** and Docker Compose
+
+> **Note — Java version:** Maven must run under Java 21. If your shell's `JAVA_HOME` points to an older JDK, set it before running Maven:
+> ```bash
+> export JAVA_HOME=/path/to/your/jdk-21
+> ```
+> On macOS with multiple JDKs installed you can use `/usr/libexec/java_home -v 21` to find the correct path.
 
 ### 1 — Start the database
 
@@ -113,7 +121,7 @@ This starts a MySQL 8 container on port `3306` with a persistent volume at `./da
 mvn spring-boot:run
 ```
 
-The API starts on **http://localhost:8080**. Hibernate will create or update the schema automatically on first boot (`ddl-auto=update`).
+The API starts on **http://localhost:8080**. Hibernate will create or update the schema automatically on first boot (`ddl-auto=update`). Spring Boot 3.2 will automatically enable **Project Loom virtual threads** as configured.
 
 ### 3 — Start the frontend
 
@@ -220,6 +228,53 @@ student-management/
 | Reply to student messages | — | ✅ | — |
 | Respond to inquiries | — | ✅ | — |
 | Upload profile photo | ✅ | ✅ | ✅ |
+
+---
+
+## Java 21 Modernisation
+
+The backend was refactored to take full advantage of Java 21 language features and runtime improvements.
+
+### Records for DTOs
+All data-transfer objects are now Java **records** — immutable by default, zero boilerplate, no Lombok required:
+
+```java
+// Before (Lombok @Data class)
+@Data
+public class LoginRequest {
+    @NotBlank private String username;
+    @NotBlank private String password;
+}
+
+// After (Java 21 record)
+public record LoginRequest(
+        @NotBlank String username,
+        @NotBlank String password) {}
+```
+
+`LoginRequest`, `RegisterRequest`, `AuthResponse`, and `CreateStudentRequest` are all records. `RegisterRequest` uses a compact constructor to apply a default role when none is supplied.
+
+### Constructor injection everywhere
+All services (`StudentService`, `AttendanceService`, `GradeService`, `EnrollmentService`, `CourseService`) and controllers replaced `@Autowired` field injection with `private final` fields + `@RequiredArgsConstructor`. This makes dependencies explicit, immutable, and trivially testable.
+
+### Project Loom — virtual threads
+`spring.threads.virtual.enabled=true` in `application.properties` switches Tomcat's request handler from a bounded platform-thread pool to **virtual threads** (M:N scheduling via Project Loom). Each HTTP request runs on its own cheap virtual thread — blocking I/O calls no longer pin a platform thread, dramatically increasing throughput under load without any code changes.
+
+### `java.time.Instant` in JwtUtil
+Token expiry and validation now use `Instant` instead of `new Date(System.currentTimeMillis() + ...)`:
+
+```java
+Instant now = Instant.now();
+Jwts.builder()
+    .issuedAt(Date.from(now))
+    .expiration(Date.from(now.plusMillis(expirationMs)))
+    ...
+```
+
+### Stream / collection improvements
+- `.collect(Collectors.toList())` replaced with `.toList()` (Java 16+, available in 21)
+- Result maps built with `Map.of(...)` instead of mutable `HashMap` + `put` chains
+- `String.formatted(...)` used for interpolation where it improves readability
 
 ---
 
